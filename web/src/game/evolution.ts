@@ -189,12 +189,53 @@ export function runTournament(strategies:Strategy[],roundsPerPair:number):Tourna
     const r=playMatch(strategies[i],strategies[j],roundsPerPair);scores.set(strategies[i].id,(scores.get(strategies[i].id)??0)+r.scoreA);scores.set(strategies[j].id,(scores.get(strategies[j].id)??0)+r.scoreB);matches.push(r);}
   return{matches,scores,ranking:strategies.map(s=>({id:s.id,label:s.label,score:scores.get(s.id)??0,color:s.color})).sort((a,b)=>b.score-a.score)};
 }
-export interface Generation{gen:number;counts:Record<string,number>;} 
-export function runEvolution(initialCounts:Record<string,number>,generations:number,roundsPerPair:number,strategies:Strategy[]=STRATEGIES):Generation[]{
-  const history:Generation[]=[{gen:0,counts:{...initialCounts}}];let counts={...initialCounts};const totalPop=Object.values(counts).reduce((a,b)=>a+b,0);
-  for(let g=1;g<=generations;g++){const active=strategies.filter(s=>(counts[s.id]??0)>0);if(!active.length)break;const ts:Record<string,number>={};for(const s of active)ts[s.id]=0;
-    for(const sA of active)for(const sB of active){const r=playMatch(sA,sB,roundsPerPair);ts[sA.id]+=r.scoreA*(counts[sB.id]??0);ts[sB.id]+=r.scoreB*(counts[sA.id]??0);}
-    const nc:Record<string,number>={};for(const s of strategies)nc[s.id]=0;let fs=0;for(const s of active){const p=counts[s.id]??0;const f=p>0?ts[s.id]/p:0;fs+=f*p;}
-    if(fs<=0)break;for(const s of active){const p=counts[s.id]??0;nc[s.id]=Math.round((ts[s.id]/p*p/fs)*totalPop);}
-    const nt=Object.values(nc).reduce((a,b)=>a+b,0);if(nt>0&&nt!==totalPop){const l=Object.entries(nc).sort((a,b)=>b[1]-a[1])[0][0];nc[l]+=totalPop-nt;}
-    counts=nc;history.push({gen:g,counts:{...counts}});}return history;}
+
+export interface Generation { gen: number; counts: Record<string, number>; }
+export function runEvolution(initialCounts: Record<string, number>, generations: number, roundsPerPair: number, strategies: Strategy[] = STRATEGIES): Generation[] {
+  const history: Generation[] = [{ gen: 0, counts: { ...initialCounts } }];
+  let counts = { ...initialCounts };
+  const totalPop = Object.values(counts).reduce((a, b) => a + b, 0);
+
+  for (let g = 1; g <= generations; g++) {
+    const active = strategies.filter((s) => (counts[s.id] ?? 0) > 0);
+    if (active.length === 0) break;
+
+    // 适应度 = 一个个体面对全种群的平均每场得分
+    const fitness: Record<string, number> = {};
+    for (const s of active) fitness[s.id] = 0;
+
+    for (let i = 0; i < active.length; i++) {
+      for (let j = i; j < active.length; j++) {
+        const A = active[i], B = active[j];
+        const r = playMatch(A, B, roundsPerPair);
+        if (i === j) {
+          fitness[A.id] += r.scoreA * (counts[A.id] ?? 0);
+        } else {
+          fitness[A.id] += r.scoreA * (counts[B.id] ?? 0);
+          fitness[B.id] += r.scoreB * (counts[A.id] ?? 0);
+        }
+      }
+    }
+    for (const s of active) fitness[s.id] /= totalPop;
+
+    // 平均适应度（按种群占比加权）
+    let avg = 0;
+    for (const s of active) avg += fitness[s.id] * ((counts[s.id] ?? 0) / totalPop);
+    if (avg <= 0) break;
+
+    // 繁殖量 ∝ 自身种群数 × 适应度
+    const nc: Record<string, number> = {};
+    for (const s of strategies) nc[s.id] = 0;
+    for (const s of active) {
+      nc[s.id] = Math.round((counts[s.id] ?? 0) * (fitness[s.id] / avg));
+    }
+    const nt = Object.values(nc).reduce((a, b) => a + b, 0);
+    if (nt > 0 && nt !== totalPop) {
+      const largest = Object.entries(nc).sort((a, b) => b[1] - a[1])[0][0];
+      nc[largest] += totalPop - nt;
+    }
+    counts = nc;
+    history.push({ gen: g, counts: { ...counts } });
+  }
+  return history;
+}
