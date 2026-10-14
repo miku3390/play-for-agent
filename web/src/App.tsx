@@ -1,4 +1,5 @@
 import { Link, Route, Routes } from "react-router-dom";
+import Watch from "./pages/Watch";
 
 function Home() {
   return <h1>Handkerchief Arena</h1>;
@@ -10,10 +11,6 @@ function Agents() {
 
 function Matches() {
   return <h1>对局列表（TODO: 对接 Match Service）</h1>;
-}
-
-function Watch() {
-  return <h1>观战（TODO: WebSocket /ws/matches/:id）</h1>;
 }
 
 export default function App() {

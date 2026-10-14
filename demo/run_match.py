@@ -29,6 +29,7 @@ from handkerchief_runtime import (  # noqa: E402
 from handkerchief_runtime.agents import (  # noqa: E402
     early_dropper, late_checker, mid_checker, patient_never_drop,
 )
+from handkerchief_runtime.env import load_env_file  # noqa: E402
 
 
 MEMORY_DIR = ROOT / "memories"
@@ -45,16 +46,6 @@ def save_memory(agent) -> None:
     p = MEMORY_DIR / f"{agent.name}.json"
     p.write_text(json.dumps({"summaries": agent.memory.summaries}, ensure_ascii=False, indent=2),
                  encoding="utf-8")
-
-
-def load_env() -> None:
-    env = ROOT / ".env"
-    if env.exists():
-        for line in env.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, v = line.split("=", 1)
-                os.environ.setdefault(k.strip(), v.strip())
 
 
 def build_llm_agents(args) -> tuple[LLMAgent, LLMAgent]:
@@ -91,7 +82,7 @@ async def main() -> None:
     ap.add_argument("--log-dir", default=str(ROOT / "logs"))
     args = ap.parse_args()
 
-    load_env()
+    load_env_file(ROOT / ".env")
     if not args.mock and not os.environ.get("DEEPSEEK_API_KEY"):
         sys.exit("缺少 DEEPSEEK_API_KEY：填进 .env 或设为环境变量（离线演示用 --mock）")
 

@@ -26,9 +26,9 @@ docker compose -f infra/docker-compose.yml up -d
 pip install -e "engine[dev]"
 pytest engine/tests
 
-# 后端服务（以 user 为例）
+# 后端服务（match service，端口 8100 避开常见占用）
 pip install -r services/requirements.txt
-uvicorn app.main:app --app-dir services/user --reload
+python -m uvicorn app.main:app --app-dir services/match --port 8100
 
 # 前端
 cd web && npm install && npm run dev

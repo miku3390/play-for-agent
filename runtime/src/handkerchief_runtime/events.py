@@ -63,7 +63,8 @@ def console_printer(e: Event) -> None:
         print(f"  回合 {p['turn']:>2} | 攻 {p['attacker_action']:<4} 守 {p['defender_action']:<4} "
               f"| {p['result']:<12} | HP {p['attacker_hp']:>2} : {p['defender_hp']:>2}{bleed}{timeout}")
     elif e.type == ROUND_END:
-        print(f"  >> 轮结束: {p['result']} | HP {p['attacker_hp']} : {p['defender_hp']}")
+        reason = "（血量归零，提前终局）" if p.get("reason") == "hp_zero" else ""
+        print(f"  >> 轮结束: {p['result']}{reason} | HP {p['attacker_hp']} : {p['defender_hp']}")
     elif e.type == MATCH_END:
         print(f"\n=== 对局结束 | 胜方 {p['winner'] or '平局'} | {p['finish_reason']} | "
               f"{p['total_rounds']} 轮 {p['total_turns']} 回合 ===")

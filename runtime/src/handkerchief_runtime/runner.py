@@ -30,8 +30,8 @@ class MatchRunner:
         self.decision_timeout_s = decision_timeout_s
         self.engine = engine or HandkerchiefEngine(EngineConfig())
 
-    async def play(self, agent_a: BaseAgent, agent_b: BaseAgent) -> dict:
-        match_id = str(uuid.uuid4())
+    async def play(self, agent_a: BaseAgent, agent_b: BaseAgent, match_id: str | None = None) -> dict:
+        match_id = match_id or str(uuid.uuid4())
         hp = {agent_a.name: 50, agent_b.name: 50}
         agent_a.reset_context()
         agent_b.reset_context()
@@ -78,7 +78,8 @@ class MatchRunner:
                 if out["round_end"]:
                     break
 
-            self.bus.emit(ROUND_END, match_id, round=round_no, result=result,
+            reason = "hp_zero" if finish_reason == "hp_zero" else None
+            self.bus.emit(ROUND_END, match_id, round=round_no, result=result, reason=reason,
                           attacker=attacker.name, attacker_hp=state.attacker_hp,
                           defender=defender.name, defender_hp=state.defender_hp)
             if finish_reason == "hp_zero":
