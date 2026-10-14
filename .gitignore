@@ -12,6 +12,7 @@ dist/
 # Env / local
 .env
 logs/
+memories/
 *.local
 
 # OS

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import sys as _sys
 
 if hasattr(_sys.stdout, "reconfigure"):
@@ -28,6 +29,22 @@ from handkerchief_runtime import (  # noqa: E402
 from handkerchief_runtime.agents import (  # noqa: E402
     early_dropper, late_checker, mid_checker, patient_never_drop,
 )
+
+
+MEMORY_DIR = ROOT / "memories"
+
+
+def load_memory(agent) -> None:
+    p = MEMORY_DIR / f"{agent.name}.json"
+    if p.exists():
+        agent.memory.summaries = json.loads(p.read_text(encoding="utf-8")).get("summaries", [])
+
+
+def save_memory(agent) -> None:
+    MEMORY_DIR.mkdir(exist_ok=True)
+    p = MEMORY_DIR / f"{agent.name}.json"
+    p.write_text(json.dumps({"summaries": agent.memory.summaries}, ensure_ascii=False, indent=2),
+                 encoding="utf-8")
 
 
 def load_env() -> None:
@@ -83,10 +100,14 @@ async def main() -> None:
     bus.subscribe(JsonlSink(Path(args.log_dir) / f"match-{uuid.uuid4().hex[:8]}.jsonl"))
 
     agents = build_mock_agents() if args.mock else build_llm_agents(args)
+    for a in agents:
+        load_memory(a)
     runner = MatchRunner(bus=bus, max_rounds=args.rounds, decision_timeout_s=args.timeout)
     result = await runner.play(*agents)
+    for a in agents:
+        save_memory(a)
 
-    print("\n--- 跨局记忆（已写入，下一局生效）---")
+    print("\n--- 跨局记忆（已持久化到 memories/，下一局注入 system prompt）---")
     for a in agents:
         print(f"[{a.name}] {a.memory.render()}")
     print("\n结果:", result)
