@@ -34,7 +34,7 @@ export const STRATEGIES: Strategy[] = [
   },
   {
     id: "tit_for_tat",
-    label: "复读机",
+    label: "以牙还牙",
     color: "#FFD166",
     description: "第一回合合作，之后模仿对手上一回合的动作。Axelrod 锦标赛冠军。",
     decide: (_my, opp) => (opp.length > 0 ? opp[opp.length - 1] : "cooperate"),
