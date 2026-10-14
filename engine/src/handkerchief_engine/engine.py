@@ -31,6 +31,12 @@ class HandkerchiefEngine:
         else:
             result, round_end = TurnResult.CONTINUE, False
 
+        # 手绢已落地且本回合未发生检查：守方流血（DROP 的收益来源）
+        bleed = 0
+        if dropped and not round_end:
+            bleed = self.config.dropped_bleed_per_turn
+            state.defender_hp -= bleed
+
         state.handkerchief_dropped = dropped
         state.attacker_hp = max(0, state.attacker_hp)
         state.defender_hp = max(0, state.defender_hp)
@@ -39,6 +45,7 @@ class HandkerchiefEngine:
             "hp_attacker": state.attacker_hp,
             "hp_defender": state.defender_hp,
             "handkerchief_dropped": state.handkerchief_dropped,
+            "bleed": bleed,
             "result": result.value,
             "round_end": round_end,
         }

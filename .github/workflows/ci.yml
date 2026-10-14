@@ -10,8 +10,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -e "engine[dev]"
-      - run: pytest engine/tests
+      - run: pip install -e "engine[dev]" -e "runtime[dev]"
+      - run: pytest engine/tests runtime/tests
 
   services:
     runs-on: ubuntu-latest

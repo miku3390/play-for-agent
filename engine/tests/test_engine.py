@@ -43,7 +43,7 @@ def test_last_turn_forced_hit_when_dropped():
     out = engine.resolve_turn(state, Action.WAIT, Action.WAIT)
     assert out["result"] == "FORCED_HIT"
     assert out["hp_attacker"] == 40
-    assert out["hp_defender"] == 55
+    assert out["hp_defender"] == 50 - 2 + 5  # 第 9 回合流血 2 点，强制检查命中回 5 点
 
 
 def test_hp_floors_at_zero():
@@ -60,3 +60,30 @@ def test_drop_is_sticky_within_round():
     assert state.handkerchief_dropped is True
     out = engine.resolve_turn(state, Action.WAIT, Action.CHECK)
     assert out["result"] == "HIT"
+def test_dropped_handkerchief_bleeds_defender_each_unchecked_turn():
+    engine = make_engine()
+    state = RoundState(round_number=1, turn_number=2)
+    out = engine.resolve_turn(state, Action.DROP, Action.WAIT)
+    assert out["bleed"] == 2
+    assert out["hp_defender"] == 48
+    state.turn_number = 3
+    out = engine.resolve_turn(state, Action.WAIT, Action.WAIT)
+    assert out["bleed"] == 2
+    assert out["hp_defender"] == 46
+
+
+def test_no_bleed_when_nothing_dropped():
+    engine = make_engine()
+    state = RoundState(round_number=1, turn_number=2)
+    out = engine.resolve_turn(state, Action.WAIT, Action.WAIT)
+    assert out["bleed"] == 0
+    assert out["hp_defender"] == 50
+
+
+def test_bleed_stops_after_check():
+    engine = make_engine()
+    state = RoundState(round_number=1, turn_number=2)
+    engine.resolve_turn(state, Action.DROP, Action.WAIT)   # 50-2=48
+    out = engine.resolve_turn(state, Action.WAIT, Action.CHECK)
+    assert out["result"] == "HIT"
+    assert out["hp_defender"] == 48 + 5

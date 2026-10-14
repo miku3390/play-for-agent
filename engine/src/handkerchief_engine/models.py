@@ -26,9 +26,9 @@ class EngineConfig:
     hit_defender_gain: int = 5
     hit_attacker_loss: int = 10
     initial_hp: int = 50
-    # TODO(balance): 攻方 DROP 目前只有风险没有收益，占优策略退化为"永不 DROP"。
-    # 落地前必须补上攻方收益数值（如 drop_reward / 延迟丢弃加成），否则博弈不成立。
-    # 见 docs/handkerchief-arena-architecture.md 附录 A。
+    # 手绢落地后、守方未检查的每个回合，守方流血扣血（暂定值，待对局实测调平）。
+    # 作用：给攻方 DROP 提供收益，否则占优策略退化为"永不 DROP"（博弈不成立）。
+    dropped_bleed_per_turn: int = 2
 
 
 @dataclass
