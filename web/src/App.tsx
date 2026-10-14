@@ -1,5 +1,6 @@
 import { Link, Route, Routes } from "react-router-dom";
-import Watch from "./pages/Watch";
+import Watch from "./pages/Watch"
+import Evolution from "./pages/Evolution";
 
 function Home() {
   return <h1>Handkerchief Arena</h1>;
@@ -18,13 +19,14 @@ export default function App() {
     <div>
       <nav>
         <Link to="/">首页</Link> | <Link to="/agents">策略</Link> |{" "}
-        <Link to="/matches">对局</Link> | <Link to="/watch">观战</Link>
+        <Link to="/matches">对局</Link> | <Link to="/watch">观战</Link> | <Link to="/evolution">信任进化</Link>
       </nav>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/agents" element={<Agents />} />
         <Route path="/matches" element={<Matches />} />
         <Route path="/watch" element={<Watch />} />
+        <Route path="/evolution" element={<Evolution />} />
       </Routes>
     </div>
   );
