@@ -5,7 +5,7 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable
 
-from handkerchief_engine import Action
+from handkerchief_engine import Action, EngineConfig
 
 from .context import CrossMatchMemory, MatchContext
 from .parser import parse_action
@@ -13,8 +13,10 @@ from .parser import parse_action
 GAME_RULES = """你在玩"丢手绢"博弈。每局最多 {max_rounds} 轮，每轮最多 {max_turns} 回合。
 每轮一名攻方一名守方，轮结束交换身份。初始 HP 各 {hp}，先归零者输。
 
-攻方：每回合选 DROP（悄悄丢下手绢）或 WAIT。手绢一旦落地，守方每回合流血 -{bleed} HP。
-守方：每回合选 CHECK（回头检查）或 WAIT。检查命中（手绢已落地）：守方 +{gain} HP，攻方 -{loss} HP；
+攻方：每回合选 DROP（悄悄丢下手绢）或 WAIT。手绢一旦落地，守方每回合流血 -{bleed} HP。你的等待有计息：
+守方检查命中时你 -{loss} HP，另按丢下的回合号每回合多扣 {chrono} HP（第 n 回合丢就多扣 {chrono}×(n-1)，越晚丢亏越多）；
+守方查空收局（或你整轮不丢走满）时按已等待回合数每回合扣 {chrono} HP；整轮不丢走满还要额外吃 -{never} HP 失职罚。
+守方：每回合选 CHECK（回头检查）或 WAIT。检查命中（手绢已落地）：守方 +{gain} HP；
 检查落空：守方 -({penalty}+当前回合数) HP。第 {max_turns} 回合结束强制检查。
 守方看不到手绢是否已落地——只能靠对手行为推理。
 
@@ -57,15 +59,23 @@ class LLMAgent(BaseAgent):
         model: str,
         max_rounds: int = 10,
         temperature: float = 0.7,
+        engine_config: EngineConfig | None = None,
     ) -> None:
         super().__init__(name, system_prompt)
         self.client = client
         self.model = model
         self.max_rounds = max_rounds
         self.temperature = temperature
+        # 规则说话要跟实际用到的引擎一致，否则提示词在对局参数被改时变成谎言
+        self.engine_config = engine_config or EngineConfig()
 
     def _system(self) -> str:
-        rules = GAME_RULES.format(max_rounds=self.max_rounds, max_turns=10, hp=50, bleed=2, gain=5, loss=10, penalty=10)
+        c = self.engine_config
+        rules = GAME_RULES.format(max_rounds=self.max_rounds, max_turns=c.max_turns_per_round,
+                                  hp=c.initial_hp, bleed=c.dropped_bleed_per_turn,
+                                  chrono=c.atk_chrono, never=c.never_atk,
+                                  gain=c.hit_defender_gain, loss=c.hit_attacker_loss,
+                                  penalty=c.miss_penalty)
         parts = [self.system_prompt.strip() or "你是一个冷静的策略型玩家。", rules, self.memory.render()]
         return "\n\n".join(parts)
 

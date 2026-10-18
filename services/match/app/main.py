@@ -15,8 +15,8 @@ import uuid
 from dataclasses import asdict
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parents[3]
 for _p in (ROOT / "engine" / "src", ROOT / "runtime" / "src"):
@@ -51,7 +51,8 @@ class AgentSpec(BaseModel):
 class MatchRequest(BaseModel):
     agent_a: AgentSpec
     agent_b: AgentSpec
-    rounds: int = 10
+    # 上限护栏：rounds 无限大 = LLM 成本失控（单局最多 50 轮，够出结果了）
+    rounds: int = Field(default=10, ge=1, le=50)
     mock: bool = False  # 离线脚本 agent，不调 LLM
 
 
@@ -84,6 +85,10 @@ def _build_agent(spec: AgentSpec, mock: bool, idx: int):
             if idx == 0
             else ScriptedAgent(spec.name, patient_never_drop, late_checker)
         )
+    api_key = os.environ.get("DEEPSEEK_API_KEY")
+    if not api_key:
+        # 缺 key 直接 4xx 拒绝，而不是等对局跑起来第一回合炸成 500
+        raise HTTPException(status_code=422, detail="missing DEEPSEEK_API_KEY（填进 .env 或环境变量；离线演示用 mock:true）")
     prompt = spec.system_prompt
     if prompt is None:
         prompt = STRATEGY_FILES[idx].read_text(encoding="utf-8")
@@ -91,7 +96,7 @@ def _build_agent(spec: AgentSpec, mock: bool, idx: int):
 
     client = AsyncOpenAI(
         base_url=os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
-        api_key=os.environ["DEEPSEEK_API_KEY"],
+        api_key=api_key,
         timeout=60.0,
     )
     return LLMAgent(spec.name, prompt, client, os.environ.get("ARENA_MODEL", "deepseek-chat"))
@@ -104,6 +109,9 @@ def health() -> dict:
 
 @app.post("/api/v1/matches", status_code=201)
 async def create_match(req: MatchRequest) -> dict:
+    # 同名会让观战页的 HP 条互相覆盖（deriveHp 用名字当 key），直接拒绝
+    if req.agent_a.name == req.agent_b.name:
+        raise HTTPException(status_code=422, detail="agent_a.name 与 agent_b.name 必须不同")
     match_id = uuid.uuid4().hex[:8]
     state = MatchState(match_id)
     MATCHES[match_id] = state
@@ -121,11 +129,22 @@ async def create_match(req: MatchRequest) -> dict:
             state.result = {"error": f"{type(exc).__name__}: {exc}"}
         finally:
             state.status = "finished"
+            _prune_finished()
             for q in state.queues:
                 q.put_nowait(None)  # 哨兵：通知所有订阅者收工
 
     asyncio.create_task(_run())
     return {"code": 200, "message": "ok", "data": {"match_id": match_id, "status": "running"}}
+
+
+MATCH_MEMORY = 50
+
+
+def _prune_finished() -> None:
+    """MATCHES 只进不出会拖死长跑进程：最多保留 50 局已结束的对局。"""
+    finished = [mid for mid, s in MATCHES.items() if s.status == "finished"]
+    for mid in finished[:-MATCH_MEMORY]:
+        MATCHES.pop(mid, None)
 
 
 @app.get("/api/v1/matches/{match_id}")
@@ -146,6 +165,7 @@ async def watch_match(ws: WebSocket, match_id: str) -> None:
         return
     await ws.accept()
     q: asyncio.Queue = asyncio.Queue()
+    # 先上证、后快照：反过来的话，补发历史与入列之间产生的查询会被永久跳过
     state.queues.append(q)
     try:
         snapshot = list(state.events)
